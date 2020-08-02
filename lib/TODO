@@ -1,0 +1,40 @@
+* log doesn't do anything
+* Replace ftgrays with my version, gain access to converted paths (raster.c)
+* text rendering
+* sounds
+* clip rectangle
+* .append.xxx = append to list of shape points various primitives
+* transformation matrix on x,y (xFix, yFix)
+* fubbyloofers game
+* clipping rectangle with wraparound for making seamless textures
+
+DONE gfx.c provides colors
+DONE gfx.k provides keycodes
+DONE gfx.js make real module, install into ~/.node_modules with gfxEngine
+DONE n-api proper integration
+DONE embed shader .txt files into module, avoid having to pass path in
+
+ORIGINAL complex binding.gyp:
+{
+  "targets": [
+    {
+      "target_name": "mod",
+      "sources": [ "glue.c", "font.c", "ftgrays.c", "main.c", "matrix.c", "render.c" ],
+      "include_dirs": ["/usr/include/SDL2"],
+      "defines": ["_REENTRANT", "_STANDALONE_", "O2"],
+      "link_settings": {
+        "libraries": ["/usr/lib/x86_64-linux-gnu/libSDL2.so"],
+      },
+    }
+  ]
+}
+
+ORIGINAL simple binding.gyp
+{
+  "targets": [
+    {
+      "target_name": "glue",
+      "sources": [ "glue.c" ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+#version 410
+uniform sampler2D TEXTURE;
+uniform vec4 COLOR;
+
+in float coverage;
+
+out vec4 colorOut;
+
+void main()
+{
+	colorOut = vec4(COLOR.rgb, COLOR.a*coverage);
+}
