@@ -12,15 +12,25 @@ subdirectory contains code for the module, and the top level directory
 contains lots of javascript programs that make use of the "gfx" module in
 various ways.
 
-Rendering is done with the ftgrays.c code taken from an old version of
-freetype, I've used it in many projects, like SDL_basic.
+I hope this might be useful, that's why I'm sharing it.
+
+============== SOUND ==============
 
 For sound output if sound is enabled audio is locked to 44100 hz, stereo.
-The program has to call the function gfx.audio() with a callback function gets
-passed the number of audio sample pairs to produce. The callback function
+The program has to call the function gfx.audio() with a callback function that
+gets passed the number of audio sample pairs to produce. The callback function
 must return an array of samples (left, right, left, right, etc.) that are in
 the range +/- 1. The module handles clipping so samples are clamped to
 the +/- 1 range.
+
+There is a mechanism gfx.loadmp3() to read an mp3 file and return an object
+with some informational members as well as a samples array, which can be
+fed to the audio device for sound effects. soundFX.js is an example.
+
+============== GRAPHICS ==============
+
+Rendering is done with the ftgrays.c code taken from an old version of
+freetype, I've used it in many projects, like SDL_basic.
 
 There are various graphics primitives, look at everything.js to see most,
 if not all of them. There is a gfx.shape() function that takes an array
@@ -46,13 +56,7 @@ window is a square or rectangle, the range (-100, -100) to (100,100) cover
 the largest centered square region that can fit in the window. (0,0) is in
 the center of the screen. Positive x and y are right and up from the center.
 
-There is a mechanism gfx.loadmp3() to read an mp3 file and return an object
-with some informational members as well as a samples array, which can be
-fed to the audio device for sound effects. soundFX.js is an example.
-
-I hope this might be useful, that's why I'm sharing it.
-
-BUILDING:
+============== BUILDING ==============
 
 Just do
 
