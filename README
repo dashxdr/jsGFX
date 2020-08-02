@@ -50,3 +50,19 @@ with some informational members as well as a samples array, which can be
 fed to the audio device for sound effects. soundFX.js is an example.
 
 I hope this might be useful, that's why I'm sharing it.
+
+BUILDING:
+
+Just do
+
+make
+
+and hopefully it will build. If it builds correctly the module will get
+dropped in $(HOME)/.node_modules/gfx and node.js seems to be able to find it
+there. Just delete that directory to uninstall.
+
+The build process requires:
+node-gyp
+libmad dev
+libpng dev
+libSDL2
