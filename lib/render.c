@@ -217,10 +217,10 @@ int i;
 	for(i=0;i<AP_STEPS;++i)
 	{
 		ax=cos(a);
-		ay=-sin(a);
+		ay=sin(a);
 		a+=da;
 		bx=cos(a);
-		by=-sin(a);
+		by=sin(a);
 
 		x1=ax;
 		y1=ay;
@@ -303,23 +303,23 @@ static void _Rect(bc *bc, double x, double y, double dx, double dy, double round
 	double dy2 = dy*c;
 
 	if(round>0.0) {
-		arc_piece(&bc->shape, x-dx1-dx2, y-dy1-dy2, round, angle+180, -90); // -1 -2
-		arc_piece(&bc->shape, x+dx1-dx2, y+dy1-dy2, round, angle+90, -90); // +1 -2
-		arc_piece(&bc->shape, x+dx1+dx2, y+dy1+dy2, round, angle+0, -90); // +1 +2
-		arc_piece(&bc->shape, x-dx1+dx2, y-dy1+dy2, round, angle+270, -90); // -1 +2
+		arc_piece(&bc->shape, x-dx1-dx2, y+dy1+dy2, round, angle+180, -90); // -1 -2
+		arc_piece(&bc->shape, x+dx1-dx2, y-dy1+dy2, round, angle+90, -90); // +1 -2
+		arc_piece(&bc->shape, x+dx1+dx2, y-dy1-dy2, round, angle, -90); // +1 +2
+		arc_piece(&bc->shape, x-dx1+dx2, y+dy1-dy2, round, angle+270, -90); // -1 +2
 	} else {
-		shape_add(&bc->shape, x-dx1-dx2, y-dy1-dy2, TAG_ONPATH);
-		shape_add(&bc->shape, x+dx1-dx2, y+dy1-dy2, TAG_ONPATH);
-		shape_add(&bc->shape, x+dx1+dx2, y+dy1+dy2, TAG_ONPATH);
-		shape_add(&bc->shape, x-dx1+dx2, y-dy1+dy2, TAG_ONPATH);
+		shape_add(&bc->shape, x-dx1-dx2, y+dy1+dy2, TAG_ONPATH);
+		shape_add(&bc->shape, x+dx1-dx2, y-dy1+dy2, TAG_ONPATH);
+		shape_add(&bc->shape, x+dx1+dx2, y-dy1-dy2, TAG_ONPATH);
+		shape_add(&bc->shape, x-dx1+dx2, y+dy1-dy2, TAG_ONPATH);
 	}
 }
 void drawRect(bc *bc, double x, double y, double dx, double dy, double round, double angle) {
 	shape_init(bc, &bc->shape);
 	double pen = bc->pen;
-	_Rect(bc, x, y, dx+pen, dy+pen, round+pen, angle);
+	_Rect(bc, x, y, dx+pen, dy+pen, round, angle);
 	shape_end(&bc->shape);
-	_Rect(bc, x, y, dx-pen, dy-pen, round-pen, angle);
+	_Rect(bc, x, y, dx-pen, dy-pen, round, angle);
 	shape_done(&bc->shape);
 }
 
@@ -341,9 +341,9 @@ static void _Poly(bc *bc, double x, double y, int s, double r, double angle, dou
 
 	int i;
 	for(i=0;i<s;++i) {
-		shape_add(&bc->shape, x+r*cos(a), y-r*sin(a), TAG_ONPATH);
+		shape_add(&bc->shape, x+r*cos(a), y+r*sin(a), TAG_ONPATH);
 		a+=da2;
-		shape_add(&bc->shape, x+r2*cos(a), y-r2*sin(a), TAG_ONPATH);
+		shape_add(&bc->shape, x+r2*cos(a), y+r2*sin(a), TAG_ONPATH);
 		a+=da2;
 	}
 }
