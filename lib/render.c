@@ -428,10 +428,13 @@ void shape_init(bc *bc, shape *shape)
 
 void shape_add(shape *shape, double x, double y, int tag)
 {
+	double *t = shape->bc->transform;;
+	float tx = centerx + scale*(x*t[0] + y*t[1] + t[2]);
+	float ty = centery - scale*(x*t[3] + y*t[4] + t[5]);
 	if(shape->numpoints < MAX_SHAPE_POINTS)
 	{
-		shape->points[shape->numpoints].x = IFACTOR *x;
-		shape->points[shape->numpoints].y = IFACTOR *y;
+		shape->points[shape->numpoints].x = IFACTOR * tx;
+		shape->points[shape->numpoints].y = IFACTOR * ty;
 		shape->tags[shape->numpoints] = tag;
 		++shape->numpoints;
 	}

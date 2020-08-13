@@ -48,7 +48,7 @@ void initbc(bc *bc, SDL_Renderer *renderer, SDL_Window *window, int xsize, int y
 	bc->ysize = ysize;
 	bc->renderer = renderer;
 	bc->window = window; // actually serves no purpose...
-	bc->pen = scale*.5;
+	bc->pen = .5;
 	transformIdentity(bc);
 }
 
@@ -325,18 +325,6 @@ void wheelEvent(struct state *mst, Uint32 ts, int v) {
 	endTagGroup();
 }
 
-static inline double scaleFix(double l) {return l*scale;}
-static inline double xFix(double x) {return centerx + scaleFix(x);}
-static inline double yFix(double y) {return centery - scaleFix(y);}
-
-//static inline void xyFix(struct state *mst, double *x, double *y, char *xn, char *yn) {
-//	bc *bc = ourBC;
-//	double tx = getDouble(mst, xn);
-//	double ty = getDouble(mst, yn);
-//	*x = xFix(tx*bc->transform[0] + ty*bc->transform[1] + bc->transform[2]);
-//	*y = yFix(tx*bc->transform[3] + ty*bc->transform[4] + bc->transform[5]);
-//}
-
 void _update(void) {
 	if(ourBC->grabcount>0) {
 		--ourBC->grabcount;
@@ -345,7 +333,7 @@ void _update(void) {
 	update(ourBC);
 }
 void _pen(double v) {
-	ourBC->pen = scaleFix(v);
+	ourBC->pen = v*.5;
 }
 void _rgb(float *put, unsigned char *color, int len) {
 	int i;
@@ -359,34 +347,34 @@ void _clear(void) {
 	fillScreen(ourBC, ourBC->color[0], ourBC->color[1], ourBC->color[2], ourBC->color[3]);
 }
 void _poly(double x, double y, int s, double r, double a, double r2) {
-	drawPoly(ourBC, xFix(x), yFix(y), s, scaleFix(r), a, r2);
+	drawPoly(ourBC, x, y, s, r, a, r2);
 }
 void _opoly(double x, double y, int s, double r, double a, double r2) {
-	drawOPoly(ourBC, xFix(x), yFix(y), s, scaleFix(r), a, r2);
+	drawOPoly(ourBC, x, y, s, r, a, r2);
 }
 void _box(double x, double y, double dx, double dy, double r, double a) {
-	drawBox(ourBC, xFix(x), yFix(y), scaleFix(dx), scaleFix(dy), scaleFix(r), a);
+	drawBox(ourBC, x, y, dx, dy, r, a);
 }
 void _rect(double x, double y, double dx, double dy, double r, double a) {
-	drawRect(ourBC, xFix(x), yFix(y), scaleFix(dx), scaleFix(dy), scaleFix(r), a);
+	drawRect(ourBC, x, y, dx, dy, r, a);
 }
 void _test(void) {
 	mylog("test\n");
 }
 void _disc(double x, double y, double r) {
-	drawDisc(ourBC, xFix(x), yFix(y), scaleFix(r));
+	drawDisc(ourBC, x, y, r);
 }
 void _circle(double x, double y, double r) {
-	drawCircle(ourBC, xFix(x), yFix(y), scaleFix(r));
+	drawCircle(ourBC, x, y, r);
 }
 void _vector(double x, double y, double x2, double y2, double pen) {
-	drawVector(ourBC, xFix(x), yFix(y), xFix(x2), yFix(y2), scaleFix(pen));
+	drawVector(ourBC, x, y, x2, y2, pen);
 }
 void _oval(double x, double y, double dx, double dy, double a) {
-	drawOval(ourBC, xFix(x), yFix(y),scaleFix(dx), scaleFix(dy), a);
+	drawOval(ourBC, x, y, dx, dy, a);
 }
 void _ellipse(double x, double y, double dx, double dy, double a) {
-	drawEllipse(ourBC, xFix(x), yFix(y),scaleFix(dx), scaleFix(dy), a);
+	drawEllipse(ourBC, x, y, dx, dy, a);
 }
 void _store(char *id) {
 	doStore(ourBC, id);
@@ -435,54 +423,8 @@ void glue_shape_coords(double *coords, int len) {
 	else if(len==6) tag=TAG_CONTROL3;
 	int j;
 	for(j=0;j<len;j+=2)
-		shape_add(&bc->shape, xFix(coords[j]), yFix(coords[j+1]), !j ? TAG_ONPATH : tag);
+		shape_add(&bc->shape, coords[j], coords[j+1], !j ? TAG_ONPATH : tag);
 }
-
-//void cmd_shape(struct state *mst) {
-//	bc *bc = ourBC;
-//	json_object *ref;
-//	if(!json_object_object_get_ex(mst->json, "p", &ref)) return;
-//	int len = json_object_array_length(ref);
-////	mylog("shape len=%d\n", len);
-//	if(len<2) return; // must be at least a line...
-//	shape_init(bc, &bc->shape);
-//	int i;
-//	for(i=0;i<len;++i) {
-//		json_object *ref2 = json_object_array_get_idx(ref, i);
-//		enum json_type type = json_object_get_type(ref2);
-//		if(type==json_type_object) {
-////			mylog("Member %d is an object\n", i);
-//			memset(mst->raw, 255, 4);
-//			float color[4];
-//			rgb(mst, ref2, color);
-//			shape_primitive(&bc->shape, color);
-//			continue;
-//		} else if(type!=json_type_array) {
-//			mylog("Member %d of shape is not an array\n", i);
-//			continue;
-//		}
-//		int l2 = json_object_array_length(ref2);
-////		mylog("shape, element %3d length %d\n", i, l2);
-//		l2&=~1; // at least pairs...
-//		if(l2==0) {
-//			shape_end(&bc->shape); // empty element is end of path
-//			continue;
-//		}
-//		int tag=-1;
-//		if(l2>6) l2=6;
-//		if(l2==4) tag=TAG_CONTROL2;
-//		else if(l2==6) tag=TAG_CONTROL3;
-//		int j;
-//		for(j=0;j<l2;j+=2) {
-//			double x = json_object_get_double(json_object_array_get_idx(ref2, j));
-//			double y = json_object_get_double(json_object_array_get_idx(ref2, j+1));
-////			mylog("Shape, element %3d,%d %lf,%lf\n", i, j/2, x, y);
-//			shape_add(&bc->shape, _xFix(x), _yFix(y), !j ? TAG_ONPATH : tag);
-//		}
-////		mst->raw[i] = json_object_get_int(t);
-//	}
-//	shape_done(&bc->shape);
-//}
 
 struct kdef kdefs[] = {
 	{"DEL", SDLK_DELETE},

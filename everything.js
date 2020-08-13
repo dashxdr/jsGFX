@@ -39,6 +39,10 @@ function listPrimitives() {
 
 var t = 0;
 function pulse() {
+	var tt = t*.001;
+	var s = Math.sin(tt);
+	var c = Math.cos(tt);
+	gs.transform({m:[c,s,0, -s,c,0]});
 	gs.color({rgb: [0, 0, 0]});
 	gs.clear();
 
@@ -89,6 +93,7 @@ function pulse() {
 	gs.color({rgb: gfx.c.orange});
 	gs.vector({x:-75, y:50+tilt*40, x2:75, y2:50+tilt2*40});
 
+	gs.transform({m:[]});
 	gs.color({rgb: [255,0,0,160],});
 	gs.disc({x:mouse.x, y:mouse.y, r:radius});
 

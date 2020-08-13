@@ -94,6 +94,7 @@ extern int useFasterShaders;
 
 // main.c
 void mylog(char *fmt, ...);
+extern double scale, centerx, centery;
 
 // matrix.c
 void mat4_translate(GLfloat *p, float x, float y, float z);
