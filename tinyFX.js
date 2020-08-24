@@ -11,14 +11,14 @@ var ga = gfx.asc;
 var gk = gfx.k;
 
 var bullWhip = gfx.loadmp3('sfx/BullWhipCrack.mp3');
-var Boing = gfx.loadmp3('sfx/Boing.mp3');
+var boing = gfx.loadmp3('sfx/Boing.mp3');
 //var gate = gfx.
 
 gfx.on('key', function(code, mod, pressed) {
 	if(!pressed) return;
 	if(code==gk.ESCAPE) gfx.quit();
 	if(code==ga(' ')) play(bullWhip);
-	if(code==ga('1')) play(Boing);
+	if(code==ga('1')) play(boing);
 	if(code==ga('q')) quiet();
 });
 
@@ -35,7 +35,7 @@ setInterval(pulse, 20);
 
 
 var playing = [];
-play(bullWhip);    // This just triggers a sound on startup, as an example
+bullWhip.on('ready', play, bullWhip);    // This just triggers a sound on startup, as an example
 gfx.audio(audioFeed);
 
 function play(s) {
@@ -59,4 +59,3 @@ function audioFeed(n) {
 	});
 	return arr;
 }
-

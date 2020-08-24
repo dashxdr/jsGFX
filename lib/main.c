@@ -37,13 +37,19 @@ void transformIdentity(bc *bc) {
 }
 void initbc(bc *bc, SDL_Renderer *renderer, SDL_Window *window, int xsize, int ysize)
 {
-	int i;
-	for(i=0;i<MAX_MYBM;++i) {
+	struct mybitmap save[MAX_MYBM]={0};
+	int i, j;
+	for(i=0,j=0;i<MAX_MYBM;++i) {
 		struct mybitmap *mybm = bc->mybm+i;
-		if(mybm->glt)
-			glDeleteTextures(1, &mybm->glt);
+		if(mybm->flags & MBM_FROMPNG)
+			save[j++] = *mybm;
+		else {
+			if(mybm->glt)
+				glDeleteTextures(1, &mybm->glt);
+		}
 	}
 	memset(bc, 0, sizeof(*bc));
+	memcpy(bc->mybm, save, sizeof(save));
 	bc->xsize = xsize;
 	bc->ysize = ysize;
 	bc->renderer = renderer;
@@ -168,6 +174,108 @@ void savepng(char *fn, int w, int h) {
 	writePNG(bm, name);
 	free_bm(bm);
 }
+
+void loadpng(char *name, int *w, int *h, char **id) {
+	unsigned char header[8];    // 8 is the maximum size that can be checked
+	png_structp png_ptr;
+	png_infop info_ptr;
+	png_bytep * row_pointers;
+	int width, height;
+	png_byte color_type;
+	int y;
+	unsigned char *bitmap;
+
+	*w=0;
+	*h=0;
+	*id=0;
+
+	if(!setupDone) {
+		mylog("Need to call gfx.setup() before you call gfx.loadpng()\n");
+		return;
+	}
+
+	/* open file and test for it being a png */
+	FILE *fp = fopen(name, "rb");
+	if (!fp) {
+		mylog("[read_png_file] File %s could not be opened for reading\n", name);
+		return;
+	}
+	int len = fread(header, 1, 8, fp);len=len;
+	if (png_sig_cmp(header, 0, 8)) {
+		fclose(fp);
+		mylog("[read_png_file] File %s is not recognized as a PNG file\n", name);
+		return;
+	}
+
+	/* initialize stuff */
+	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+	if (!png_ptr) {
+		fclose(fp);
+		mylog("[read_png_file] png_create_read_struct failed\n");
+		return;
+	}
+
+	info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr) {
+		fclose(fp);
+		mylog("[read_png_file] png_create_info_struct failed\n");
+		return;
+	}
+
+	png_init_io(png_ptr, fp);
+	png_set_sig_bytes(png_ptr, 8);
+
+	png_read_info(png_ptr, info_ptr);
+
+	width = png_get_image_width(png_ptr, info_ptr);
+	height = png_get_image_height(png_ptr, info_ptr);
+	color_type = png_get_color_type(png_ptr, info_ptr);
+//	int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+	int bpr = png_get_rowbytes(png_ptr,info_ptr);
+
+	png_set_interlace_handling(png_ptr);
+	png_read_update_info(png_ptr, info_ptr);
+
+	int bpp = color_type==PNG_COLOR_TYPE_RGBA ? 4 : 3;
+
+	int save1=0, save2=0;
+	glGetIntegerv(GL_UNPACK_ROW_LENGTH, &save1);
+	glGetIntegerv(GL_UNPACK_ALIGNMENT, &save2);
+//	printf("GL_UNPACK_ROW_LENGTH = %d\n", save1);
+//	printf("GL_UNPACK_ALIGNMENT = %d\n", save2);
+
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+	row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * height);
+	bitmap = malloc(height*bpr);
+	for (y=0; y<height; y++)
+		row_pointers[y] = (png_byte*) (bitmap + (height-1-y)*bpr);
+
+	png_read_image(png_ptr, row_pointers);
+
+	fclose(fp);
+//mylog("%d,%d,%d,%d\n", width, height, bit_depth, color_type);
+//bit_depth = bit_depth;
+//width = width;
+//color_type = color_type;
+//printf("RGB %d\n", PNG_COLOR_TYPE_RGB);
+//printf("RGBA %d\n", PNG_COLOR_TYPE_RGBA);
+
+//int s = height*bpr;int i;for(i=0;i<s;i+=4) bitmap[i]=bitmap[i+1]=0;
+	struct mybitmap *bm = makeBG(ourBC, width, height, bpp, bitmap);
+	*w = bm->xsize;
+	*h = bm->ysize;
+	*id = bm->name;	
+
+	free(bitmap);
+	free(row_pointers);
+
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, save1);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, save2);
+
+}
+
 
 void saveppm(char *fn, int w, int h)
 {
@@ -376,11 +484,12 @@ void _oval(double x, double y, double dx, double dy, double a) {
 void _ellipse(double x, double y, double dx, double dy, double a) {
 	drawEllipse(ourBC, x, y, dx, dy, a);
 }
-void _store(char *id) {
-	doStore(ourBC, id);
+void _store(char *id, double x, double y, double x2, double y2) {
+	doStore(ourBC, id, x, y, x2, y2);
 }
-void _restore(char *id) {
-	doRestore(ourBC, id);
+void _restore(char *id, int xyValid, double x, double y, double w, double h,
+			double x1, double y1, double x2, double y2) {
+	doRestore(ourBC, id, xyValid, x, y, w, h, x1, y1, x2, y2);
 }
 void _loglevel(int loglevel) {
 	thestate->loglevel = loglevel; // HACK, don't want to refer to it directly
@@ -580,7 +689,7 @@ void setupAudio(void) {
 	SDL_PauseAudio(0);
 
 }
-
+int setupDone = 0;
 int setup(int xpos, int ypos, int xsize, int ysize) {
 	if ( SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0 )
 	{
@@ -603,6 +712,7 @@ int setup(int xpos, int ypos, int xsize, int ysize) {
 
 	fillScreen(ourBC, 0.0, 0.0, 0.0, 1.0);
 	update(ourBC);
+	setupDone = 1;
 	return 0;
 }
 

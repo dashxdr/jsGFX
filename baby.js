@@ -126,7 +126,7 @@ function babyCount() {
 }
 
 function placeBaby() {
-	function w(x) {return x>=0 && x<cycle.length && cycle[x];return cycle[x];}
+	function w(x) {return x>=0 && x<cycle.length && cycle[x];}
 	for(;;) {
 		var t = Math.floor(Math.random()*64);
 		if(w(t-14)) continue;

@@ -31,8 +31,9 @@ void _circle(double x, double y, double r);
 void _vector(double x, double y, double x2, double y2, double pen);
 void _oval(double x, double y, double dx, double dy, double a);
 void _ellipse(double x, double y, double dx, double dy, double a);
-void _store(char *id);
-void _restore(char *id);
+void _store(char *id, double x, double y, double x2, double y2);
+void _restore(char *id, int validXY, double w, double h, double x, double y,
+			double x1, double y1, double x2, double y2);
 void _loglevel(int loglevel);
 void _transform(double *mat, int len);
 void _shape(void);
@@ -51,4 +52,31 @@ struct audioRec {
 	double samples[0]; // all interleaved, must be last in the struct
 };
 struct audioRec *loadMP3(char *filename);
+void loadpng(char *name, int *width, int *height, char **id);
+int gCompile(char *vs, char *fs);
+void gClear(double *rgba);
 
+struct aValue { // for attributes
+	char key[32];
+	int value;
+};
+struct uValue { // for uniforms
+	char key[32];
+	float *array;
+	int numFloats;
+	float single;
+	int mustFree;
+};
+struct gDraw {
+	int program;
+	int numAttributes;
+	struct aValue *attributes;
+	int numUniforms;
+	struct uValue *uniforms;
+	int numFloats;
+	float *array; // vertex data
+	int numIndexes;
+	int16_t *indexes;
+	int type;
+};
+void gDraw(struct gDraw *gd);

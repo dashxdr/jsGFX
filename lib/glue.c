@@ -21,7 +21,8 @@
 #define STRING(value,dest) status = napi_get_value_string_utf8(env, value, dest, sizeof(dest), 0)
 
 #define OBJ_NAMED(member, dest) {dest=0;\
-  status = napi_get_named_property(env, obj, #member, &dest);}
+  bool has;napi_has_named_property(env, obj, #member, &has);\
+  status = !has ? napi_invalid_arg : napi_get_named_property(env, obj, #member, &dest);}
 
 #define OBJ_STRING(member, dest) {napi_value _ttt;\
   status = napi_get_named_property(env, obj, #member, &_ttt);\
@@ -40,7 +41,18 @@
   F(_box) F(_rect) F(_test) F(_disc) F(_circle) F(_vector) \
   F(_oval) F(_ellipse) F(_store) F(_restore) F(_loglevel) \
   F(_transform) F(_shape)
-#define PUBLICS(F) F(setup) F(pollInput) F(quit) F(pollAudio) F(feedAudio) F(loadmp3)
+#define PUBLICS(F) F(setup) F(pollInput) F(quit) F(pollAudio) F(feedAudio) F(loadmp3) F(loadpng)
+
+static char *allocString(napi_env env, napi_value value) {
+	size_t size=0;
+	napi_status status = napi_get_value_string_utf8(env, value, 0, 0, &size);
+	if(status!=napi_ok) return 0;
+	++size;
+	char *p = malloc(size);
+	status = napi_get_value_string_utf8(env, value, p, size, 0);
+	status = status;
+	return p;
+}
 
 FUNCTION(_setup) {
 	ARGS
@@ -152,8 +164,34 @@ FUNCTION(_loadmp3) {
 	free(ar);
 	return res;
 }
+FUNCTION(_loadpng) {
+	ARGS;
+	obj = obj;
+	napi_value res = 0;
+	if(argc==0) return res;
+	char name[1024]={0};
+	STRING(argv[0], name);
+	char *id;
+	int width;
+	int height;
+	loadpng(name, &width, &height, &id);
+//printf("%s %d %d\n", id, width, height);
+	if(width && height) {
+		status = napi_create_object(env, &res);
+		napi_value val;
+		void addint32(char *name, int value) {
+			status = napi_create_int32(env, value, &val);
+			status = napi_set_named_property(env, res, name, val);
+		}
+		addint32("width", width);
+		addint32("height", height);
+		status = napi_create_string_utf8(env, id, NAPI_AUTO_LENGTH, &val);
+		status = napi_set_named_property(env, res, "id", val);
+	}
+	return res;
+}
 
-static double d1, d2, d3, d4, d5, d6;
+static double d1, d2, d3, d4, d5, d6, d7, d8;
 static double doubleArr[6];
 static int i1;
 static char s1[64];
@@ -198,6 +236,190 @@ static int doubleList(napi_env env, napi_value from, char *name, double *put, in
 	}
 	return len;
 }
+
+FUNCTION(_gClear) {
+	ARGS;
+	obj = obj;
+	napi_value res = 0;
+	double rgba[4] = {0, 0, 0, 1};
+	doubleList(env, obj, "rgb", rgba, 4);
+	gClear(rgba);
+	return res;
+}
+
+FUNCTION(_gCompile) {
+	ARGS;
+	obj = obj;
+	napi_value res = 0;
+	char *vs = allocString(env, argv[0]);
+	if(!vs) {
+		printf("gfx.g.compile invalid first argument\n");
+		return res;
+	}
+	char *fs = allocString(env, argv[1]);
+	if(!fs) {
+		free(vs);
+		printf("gfx.g.compile invalid second argument\n");
+		return res;
+	}
+//	printf("%s\n", vs);
+//	printf("%s\n", fs);
+	int program = gCompile(vs, fs);
+	free(vs);
+	free(fs);
+	status = napi_create_int32(env, program, &res);
+	return res;
+}
+FUNCTION(_gDraw) {
+	ARGS;
+	obj = obj;
+	napi_value res = 0;
+	int prog;
+	OBJ_INT32(program, prog);
+	if(status!=napi_ok) {printf("Object have a program member from .compile()\n");return res;}
+	napi_value attrib;
+	OBJ_NAMED(attributes, attrib);
+	if(status!=napi_ok) {printf("Object must define the .attributes object\n");return res;}
+
+	napi_value arr;
+	OBJ_NAMED(array, arr);
+	if(status!=napi_ok) {printf("Object must define the .array object\n");return res;}
+
+	napi_value ndx;
+	OBJ_NAMED(indexes, ndx);
+
+	napi_value unif=0;
+	OBJ_NAMED(uniforms, unif);
+
+	struct gDraw gd = {0};
+	gd.program = prog;
+
+	struct aValue *aList(napi_value obj, int *count) {
+		napi_value e;
+		status = napi_get_property_names(env, obj, &e);
+		uint32_t n=0;
+		status = napi_get_array_length(env, e, &n);
+		*count = n;
+		struct aValue *av = malloc(n*sizeof(struct aValue));
+		uint32_t i;
+		for(i=0;i<n;++i) {
+			napi_value key;
+			status = napi_get_element(env, e, i, &key);
+			STRING(key, av[i].key);
+			napi_value value;
+			status = napi_get_named_property(env, obj, av[i].key, &value);
+			INT32(value, av[i].value);
+//			printf("%d:%s=%d\n", i, av[i].key, av[i].value);
+		}
+		return av;
+	}
+	float *getFloats(napi_value o, int *count) {
+		uint32_t n=0;
+		status = napi_get_array_length(env, o, &n);
+		*count = n;
+		float *put = malloc(n*sizeof(float));
+		uint32_t i;
+		for(i=0;i<n;++i) {
+			napi_value e;
+			status = napi_get_element(env, o, i, &e);
+			double val;
+			DOUBLE(e, val);
+			put[i] = val;
+		}
+		return put;
+	}
+	int16_t *getIndexes(napi_value o, int *count) {
+		uint32_t n=0;
+		status = napi_get_array_length(env, o, &n);
+		*count = n;
+		int16_t *put = malloc(n*sizeof(int16_t));
+		uint32_t i;
+		for(i=0;i<n;++i) {
+			napi_value e;
+			status = napi_get_element(env, o, i, &e);
+			int32_t val;
+			INT32(e, val);
+			put[i] = val;
+		}
+		return put;
+	}
+	struct uValue *uList(napi_value obj, int *count) {
+		napi_value e;
+		status = napi_get_property_names(env, obj, &e);
+		uint32_t n=0;
+		status = napi_get_array_length(env, e, &n);
+		*count = n;
+		struct uValue *uv = calloc(n, sizeof(struct uValue));
+		uint32_t i;
+		for(i=0;i<n;++i) {
+			napi_value key;
+			status = napi_get_element(env, e, i, &key);
+			STRING(key, uv[i].key);
+			napi_value arr=0;
+			status = napi_get_named_property(env, obj, uv[i].key, &arr);
+			napi_typedarray_type type=-1;
+			size_t length;
+			void *data=0;
+			napi_value arraybuffer;
+			size_t byteoffset;
+
+			status = napi_get_typedarray_info(env, arr, &type, &length, &data, &arraybuffer, &byteoffset);
+			if(status == napi_ok) {
+				if(type==napi_float32_array) {
+					uv[i].numFloats = length;
+					uv[i].array = data;
+				} else {
+					uv[i].array = &uv[i].single;
+					uv[i].numFloats = 1;
+					uv[i].single = 0;
+				}
+			} else {
+				bool isArray=0;
+				status=napi_is_array(env, arr, &isArray);
+				if(isArray) {
+					uv[i].mustFree = 1;
+					uv[i].array = getFloats(arr, &uv[i].numFloats);
+				} else {
+					uv[i].array = &uv[i].single;
+					uv[i].numFloats = 1;
+					double t;
+					DOUBLE(arr, t);
+					uv[i].single = t;
+				}
+			}
+//			printf("%d:%s=%d %p\n", i, uv[i].key, uv[i].numFloats, uv[i].array);
+		}
+		return uv;
+	}
+	gd.attributes = aList(attrib, &gd.numAttributes);
+	if(unif) gd.uniforms = uList(unif, &gd.numUniforms);
+
+	gd.array = getFloats(arr, &gd.numFloats);
+	if(ndx) gd.indexes = getIndexes(ndx, &gd.numIndexes);
+
+	napi_value type=0;
+	OBJ_NAMED(type, type);
+	if(type) status = napi_get_value_int32(env, type, &gd.type);
+	else gd.type = 5; // TRIANGLE_STRIP
+
+	gDraw(&gd);
+
+	if(gd.uniforms) {
+		int i;
+		for(i=0;i<gd.numUniforms;++i) {
+			if(gd.uniforms[i].mustFree)
+				free(gd.uniforms[i].array);
+		}
+		free(gd.uniforms);
+	}
+	if(gd.attributes) free(gd.attributes);
+	if(gd.array) free(gd.array);
+	if(gd.indexes) free(gd.indexes);
+
+	return res;
+}
+
+
 FUNCTION(__test) {
 	_test();
 	return 0;
@@ -314,13 +536,37 @@ FUNCTION(__ellipse) {
 FUNCTION(__store) {
 	ARGS
 	OBJ_STRING(id, s1);
-	_store(s1);
+	OBJ_DOUBLE(x, d1);
+	OBJ_DOUBLE(y, d2);
+	OBJ_DOUBLE(x2, d3);
+	OBJ_DOUBLE(y2, d4);
+	_store(s1, d1, d2, d3, d4);
 	return 0;
 }
 FUNCTION(__restore) {
 	ARGS
 	OBJ_STRING(id, s1);
-	_restore(s1);
+	OBJ_DOUBLE(x, d1);
+	OBJ_DOUBLE(y, d2);
+	OBJ_DOUBLE(w, d3);
+	OBJ_DOUBLE(h, d4);
+	OBJ_DOUBLE(x1, d5);
+	OBJ_DOUBLE(y1, d6);
+	OBJ_DOUBLE(x2, d7);
+	OBJ_DOUBLE(y2, d8);
+	bool has(char *name) {
+		bool res;
+		napi_has_named_property(env, obj, name, &res);
+		return res;
+	}
+	if(!has("w")) d3=-1;
+	if(!has("h")) d4=-1;
+	if(!has("x1")) d5=0.;
+	if(!has("y1")) d6=0.;
+	if(!has("x2")) d7=1.;
+	if(!has("y2")) d8=1.;
+
+	_restore(s1, has("x") && has("y"), d1, d2, d3, d4, d5, d6, d7, d8);
 	return 0;
 }
 FUNCTION(__loglevel) {
@@ -426,8 +672,14 @@ static napi_value Init(napi_env env, napi_value exports) {
 		status = napi_set_named_property(env, k, kd->name, val);
 		++kd;
 	}
-
 	status = napi_set_named_property(env, exports, "k", k);
+
+	napi_value g;
+	status = napi_create_object(env, &g);
+	status = wrap(env, g, _gClear, "clear");
+	status = wrap(env, g, _gCompile, "compile");
+	status = wrap(env, g, _gDraw, "draw");
+	status = napi_set_named_property(env, exports, "g", g);
 
 	status = status;
 

@@ -31,6 +31,7 @@ install:
 	@echo Installing into $(INSTALLDIR)
 	@mkdir -vp $(INSTALLDIR)
 	@cp -v gfx.js $(INSTALLDIR)/index.js
+	@cp -v matrix.js $(INSTALLDIR)
 	@mkdir -vp $(INSTALLDIR)/$(CLONEDIR)
 	@cp -v $(FROM)/mod.node $(INSTALLDIR)
 	@cp -v $(FROM)/$(CLONEDIR)/* $(INSTALLDIR)/$(CLONEDIR)

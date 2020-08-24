@@ -14,7 +14,7 @@ gfx.on('key', function(code, mod, pressed) {
 //	mylog('code=' + code, 'mod=' + mod, 'pressed=' + pressed);
 	if(pressed) {
 		if(code==27) gfx.quit();
-		if(code==13) clear([0,0,0]);
+		if(code==13) clear([255,255,255]);
 		if(code==48) changeColor([0,0,0]);
 		if(code==49) changeColor([255,0,0]);
 		if(code==50) changeColor([0,255,0]);
@@ -39,6 +39,7 @@ gfx.on('wheel', function(v) {
 function clear(rgb) {
 	gs.color({rgb: rgb});
 	gs.clear();
+	gs.store({id:'bg'});
 }
 
 var edge = 1024;
@@ -46,6 +47,7 @@ gfx.setup({w:edge, h:edge});
 var drawColor = [255, 0, 0];
 function changeColor(color) {drawColor = color;}
 
+clear([255,255,255]);
 function pulse() {
 	gs.color({rgb: [255, 0, 0]});
 //	gs.clear();

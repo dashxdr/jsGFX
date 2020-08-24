@@ -32,11 +32,15 @@ struct shape {
 	int pcount;
 };
 
+#define MBM_FROMPNG   1
+#define MBM_HASALPHA  2
 struct mybitmap {
 	unsigned int glt;
+	int xsize, ysize;
 	char name[64];
+	int flags;
 };
-#define MAX_MYBM 8
+#define MAX_MYBM 64
 
 struct basic_context {
 	SDL_Renderer *renderer;
@@ -77,24 +81,28 @@ void drawBox(bc *bc, double x, double y, double dx, double dy, double round, dou
 void drawVector(bc *bc, double x, double y, double x2, double y2, double r);
 void drawOval(bc *bc, double x, double y, double dx, double dy, double angle);
 void drawEllipse(bc *bc, double x, double y, double dx, double dy, double angle);
-void doStore(bc *bc, const char *id);
-void doRestore(bc *bc, const char *id);
+void doStore(bc *bc, const char *id, double x, double y, double x2, double y2);
+void doRestore(bc *bc, const char *id, int xyValid, double x, double y,
+		double w, double h, double x1, double y1, double x2, double y2);
 void drawPoly(bc *bc, double x, double y, int s, double r, double a, double r2);
 void drawOPoly(bc *bc, double x, double y, int s, double r, double a, double r2);
 extern int newspanner;
 extern int origprog;
-void savefullscreen(int texture, int sizex, int sizey);
-void fullscreentexture(int texture, int sizex, int sizey, int doblend);
+void copyFromScreen(int texture, int xpos, int ypos, int xsize, int ysize);
+void copyToScreen(int texture, int xpos, int ypos, int sizex, int sizey, int doblend,
+		double tx1, double ty1, double tx2, double ty2);
 unsigned int genTexture(void);
 void deleteTexture(unsigned int);
 void setup_gl(void);
 extern GLuint msolid, solid_DATA, solid_VIEW, solid_COLOR, solid_SCREENSIZE;
 extern GLuint vertex_values;
 extern int useFasterShaders;
+struct mybitmap *makeBG(bc *bc, int width, int height, int bpp, void *rowpointers);
 
 // main.c
 void mylog(char *fmt, ...);
 extern double scale, centerx, centery;
+extern int setupDone;
 
 // matrix.c
 void mat4_translate(GLfloat *p, float x, float y, float z);

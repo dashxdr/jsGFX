@@ -42,7 +42,7 @@ function pulse() {
 	var tt = t*.001;
 	var s = Math.sin(tt);
 	var c = Math.cos(tt);
-	gs.transform({m:[c,s,0, -s,c,0]});
+	gs.transform({m:[c,-s,0, s,c,0]});
 	gs.color({rgb: [0, 0, 0]});
 	gs.clear();
 
@@ -96,6 +96,9 @@ function pulse() {
 	gs.transform({m:[]});
 	gs.color({rgb: [255,0,0,160],});
 	gs.disc({x:mouse.x, y:mouse.y, r:radius});
+
+	gs.store({id:'area', x:25, y:0, x2:75, y2:50});
+	gs.restore({id:'area', x:-50, y:0});
 
 	gs.update();
 	++t;

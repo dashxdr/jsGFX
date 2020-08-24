@@ -57,7 +57,7 @@ function load(d) {
 	} else s=ns;
 	if(s) {
 		mylog(name);
-		setupRanges(512);
+		s.on('ready', function() {setupRanges(512)});
 	}
 }
 load();

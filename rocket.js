@@ -17,7 +17,7 @@ var star = 1;
 var limit=100;
 var limit2=limit*2;
 var lc=0, rc=0, uc=0, dc=0;
-function asc(c) {return c.charCodeAt(0);}
+var asc = gfx.asc;
 gfx.on('key', function(code, mod, pressed) {
 //	mylog('code=' + code, 'mod=' + mod, 'pressed=' + pressed);
 	if(code==gfx.k.LEFT) {goLeft=pressed;lc=0;}

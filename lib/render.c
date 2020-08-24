@@ -378,6 +378,12 @@ void drawVector(bc *bc, double x, double y, double x2, double y2, double pen) {
 	shape_done(&bc->shape);
 }
 
+void transform(bc *bc, double *tx, double *ty, double x, double y) {
+	double *t = bc->transform;;
+	*tx = centerx + scale*(x*t[0] + y*t[1] + t[2]);
+	*ty = centery - scale*(x*t[3] + y*t[4] + t[5]);
+}
+
 struct mybitmap *findBM(bc *bc, const char *name) {
 	int i;
 	for(i=0;i<MAX_MYBM;++i) {
@@ -386,26 +392,104 @@ struct mybitmap *findBM(bc *bc, const char *name) {
 	}
 	return 0;
 }
-struct mybitmap *storeBG(bc *bc, const char *id, int forceblack) {
-	struct mybitmap *mybm = findBM(bc, id);
-	if(!mybm) {
-		unsigned int oldt = bc->mybm[MAX_MYBM-1].glt;
-		if(oldt==0) oldt = genTexture();
-		mybm = bc->mybm;
-		memmove(mybm+1, mybm, (MAX_MYBM-1)*sizeof(*mybm));
-		snprintf(mybm->name, sizeof(mybm->name), "%s", id);
-		mybm->glt = oldt;
-	}
-	savefullscreen(mybm->glt, bc->xsize, bc->ysize);
+struct mybitmap *getBM(bc *bc) {
+	struct mybitmap *mybm;
+	unsigned int oldt = bc->mybm[MAX_MYBM-1].glt;
+	if(oldt==0) oldt = genTexture();
+	mybm = bc->mybm;
+	memmove(mybm+1, mybm, (MAX_MYBM-1)*sizeof(*mybm));
+	mybm->glt = oldt;
+	mybm->flags = 0;
 	return mybm;
 }
-void doStore(bc *bc, const char *id) {
-	storeBG(bc, id, 0);
-}
-void doRestore(bc *bc, const char *id) {
+struct mybitmap *storeBG(bc *bc, const char *id, int xpos, int ypos, int xsize, int ysize) {
 	struct mybitmap *mybm = findBM(bc, id);
-	if(!mybm) mybm = storeBG(bc, id, 1);
-	fullscreentexture(mybm->glt, bc->xsize, bc->ysize, 0);
+	if(!mybm) {
+		mybm = getBM(bc);
+		snprintf(mybm->name, sizeof(mybm->name), "%s", id);
+		mybm->xsize = xsize;
+		mybm->ysize = ysize;
+	}
+	copyFromScreen(mybm->glt, xpos, bc->ysize-(ypos+ysize), xsize, ysize);
+	return mybm;
+}
+static int idCount = 0;
+struct mybitmap *makeBG(bc *bc, int width, int height, int bpp, void *bitmap) {
+	struct mybitmap *mybm = getBM(bc);
+	snprintf(mybm->name, sizeof(mybm->name), "_png_%d", idCount++);
+	mybm->xsize = width;
+	mybm->ysize = height;
+
+	GLint saveprog;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &saveprog);
+	glUseProgram(origprog);
+	glEnable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, mybm->glt);
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexImage2D( GL_TEXTURE_2D, 0, 4, width, height, 0, bpp==4 ? GL_RGBA : GL_RGB,
+			GL_UNSIGNED_BYTE, bitmap );
+//	glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGB,xpos,ypos,xsize,ysize,0);
+	glUseProgram(saveprog);
+	mybm->flags |= MBM_FROMPNG;
+	if(bpp==4) mybm->flags |= MBM_HASALPHA;
+
+	return mybm;
+}
+void doStore(bc *bc, const char *id, double x1, double y1, double x2, double y2) {
+	int lx = bc->xsize;
+	int ly = bc->ysize;
+	int x=0;
+	int y=0;
+	int xsize = lx;
+	int ysize = ly;
+	if(x1!=x2 && y1!=y2) {
+		double tx1, ty1, tx2, ty2;
+		transform(bc, &tx1, &ty1, x1, y1);
+		transform(bc, &tx2, &ty2, x2, y2);
+		x = tx1;
+		y = ty1;
+		xsize = (int)tx2-x;
+		ysize = (int)ty2-y;
+		if(xsize<0) {xsize=-xsize;x-=xsize;}
+		if(ysize<0) {ysize=-ysize;y-=ysize;}
+		if(x<0) {xsize+=x;x=0;if(xsize<0) xsize=0;}
+		if(y<0) {ysize+=y;y=0;if(ysize<0) ysize=0;}
+		if(x>=lx) {x=0;xsize=0;}
+		if(y>=ly) {y=0;ysize=0;}
+		int t = lx-x;
+		if(xsize>t) xsize=t;
+		t=ly-y;
+		if(ysize>t) ysize=t;
+	}
+	storeBG(bc, id, x, y, xsize, ysize);
+}
+void doRestore(bc *bc, const char *id, int xyValid, double x, double y,
+		double w, double h, double x1, double y1, double x2, double y2) {
+	struct mybitmap *mybm = findBM(bc, id);
+	if(!mybm) return;
+	int xpos=0, ypos=bc->ysize;
+	double tx, ty;
+	if(xyValid) {
+		transform(bc, &tx, &ty, x, y);
+		xpos = tx;
+		ypos = ty;
+	}
+	int width, height;
+	if(w<0 || h<0 || !xyValid) {
+		width = mybm->xsize*fabs(x2-x1);
+		height = mybm->ysize*fabs(y2-y1);
+	} else {
+		transform(bc, &tx, &ty, x+w, y+h);
+		width = abs(tx-xpos);
+		height = abs(ty-ypos);
+	}
+	GLint bSrc, bDst;
+	glGetIntegerv(GL_BLEND_SRC_ALPHA, &bSrc);
+	glGetIntegerv(GL_BLEND_DST_ALPHA, &bDst);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	copyToScreen(mybm->glt, xpos, ypos, width, height, mybm->flags&MBM_HASALPHA, x1, y1, x2, y2);
+	glBlendFunc(bSrc, bDst);
 }
 
 #define IFACTOR 64  // used to fix coords to the grays rendering engine 
@@ -428,9 +512,8 @@ void shape_init(bc *bc, shape *shape)
 
 void shape_add(shape *shape, double x, double y, int tag)
 {
-	double *t = shape->bc->transform;;
-	float tx = centerx + scale*(x*t[0] + y*t[1] + t[2]);
-	float ty = centery - scale*(x*t[3] + y*t[4] + t[5]);
+	double tx, ty;
+	transform(shape->bc, &tx, &ty, x, y);
 	if(shape->numpoints < MAX_SHAPE_POINTS)
 	{
 		shape->points[shape->numpoints].x = IFACTOR * tx;
@@ -583,8 +666,8 @@ void shape_done(shape *shape)
 }
 
 //http://www.allegro.cc/forums/thread/597340
-void savefullscreen(int texture, int sizex, int sizey)
-{
+// evidently (0,0) is at the bottom left and increasing y is upwards
+void copyFromScreen(int texture, int xpos, int ypos, int xsize, int ysize) {
 	GLint saveprog;
 	glGetIntegerv(GL_CURRENT_PROGRAM, &saveprog);
 	glUseProgram(origprog);
@@ -592,12 +675,13 @@ void savefullscreen(int texture, int sizex, int sizey)
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-	glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGB,0,0,sizex,sizey,0);
+	glCopyTexImage2D(GL_TEXTURE_2D,0,GL_RGB,xpos,ypos,xsize,ysize,0);
 	glUseProgram(saveprog);
 }
 
 
-void fullscreentexture(int texture, int sizex, int sizey, int doblend)
+void copyToScreen(int texture, int xpos, int ypos, int xsize, int ysize, int doblend,
+		double tx1, double ty1, double tx2, double ty2)
 {
 	GLint saveprog;
 	glGetIntegerv(GL_CURRENT_PROGRAM, &saveprog);
@@ -620,17 +704,17 @@ void fullscreentexture(int texture, int sizex, int sizey, int doblend)
 	glBegin(GL_QUADS);
 	glNormal3f(0.0, 0.0, 1.0);
 	float x1, y1, x2, y2;
-	x1 = 0.0;
-	x2 = sizex;
-	y1 = sizey;
-	y2 = 0.0;
-	glTexCoord2f(0.0, 0.0);
+	x1 = xpos;
+	x2 = xpos+xsize;
+	y1 = ypos;
+	y2 = ypos-ysize;
+	glTexCoord2f(tx1, ty1);
 	glVertex3f(x1, y1, 0.0);
-	glTexCoord2f(1.0, 0.0);
+	glTexCoord2f(tx2, ty1);
 	glVertex3f(x2, y1, 0.0);
-	glTexCoord2f(1.0, 1.0);
+	glTexCoord2f(tx2, ty2);
 	glVertex3f(x2, y2, 0.0);
-	glTexCoord2f(0.0, 1.0);
+	glTexCoord2f(tx1, ty2);
 	glVertex3f(x1, y2, 0.0);
 	glEnd();
 	glPopMatrix();
@@ -656,24 +740,139 @@ void showerrors(int shader, char *name)
 		mylog("%s:\n%s\n", name, errorlog);
 }
 
+int lowLoadShader(int type, char *name, char *data) {
+	// add the source code to the shader and compile it
+	int shader = glCreateShader(type); 
+	glShaderSource(shader, 1, (const GLchar **)&data, 0);
+	glCompileShader(shader);
+	showerrors(shader, name);
+	return shader;
+}
 int loadShader(int type, char *name, char *data, int size)
 {
 	GLchar *mem;
-	int shader = glCreateShader(type); 
 	mem = malloc(size+1);
 	memcpy(mem, data, size);
 	mem[size] = 0;
-
-	// add the source code to the shader and compile it
-	glShaderSource(shader, 1, (const GLchar **)&mem, 0);
-	glCompileShader(shader);
-	showerrors(shader, name);
+	int shader = lowLoadShader(type, name, mem);
 	free(mem);
-
 	return shader;
 }
 GLuint msolid, solid_DATA, solid_VIEW, solid_COLOR, solid_SCREENSIZE;
 GLuint vertex_values;
+int gCompile(char *vs, char *fs) {
+	int program = glCreateProgram();
+	glAttachShader(program, lowLoadShader(GL_VERTEX_SHADER, "js_vs", vs));
+	glAttachShader(program, lowLoadShader(GL_FRAGMENT_SHADER, "js_fs", fs));
+	glLinkProgram(program);
+	return program;
+}
+void gClear(double *rgba) {
+	glClearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+void gDraw(struct gDraw *gd) {
+	if(0) {
+		int i;
+		printf("---gDraw---\n");
+		printf("type           = %d\n", gd->type);
+		printf("numIndexes     = %d  ", gd->numIndexes);
+		int limit = 8;
+		for(i=0;i<gd->numIndexes && i<limit;++i)
+			printf("%4d", gd->indexes[i]);
+		printf("\n");
+
+
+		printf("numAttributes  = %d\n", gd->numAttributes);
+		for(i=0;i<gd->numAttributes;++i) {
+			printf("  %2d %s\n", gd->attributes[i].value, gd->attributes[i].key);
+		}
+
+		printf("numUniforms    = %d\n", gd->numUniforms);
+		for(i=0;i<gd->numUniforms;++i) {
+			printf("  %2d %-12s", gd->uniforms[i].numFloats, gd->uniforms[i].key);
+			int j;
+			for(j=0;j<gd->uniforms[i].numFloats;++j)
+				printf("%6.2f", gd->uniforms[i].array[j]);
+			printf("\n");
+		}
+		printf("numFloats      = %d\n", gd->numFloats);
+	}
+	GLint oldProg;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &oldProg);
+
+	int program = gd->program;
+	glUseProgram(program);
+
+	int depthTest, depthFunc;
+	glGetIntegerv(GL_DEPTH_TEST, &depthTest);
+	glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
+
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+
+	int stride = 0;
+	int i;
+	for(i=0;i<gd->numAttributes;++i) stride += gd->attributes[i].value;
+	GLuint buffer;
+	glGenBuffers(1, &buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, buffer);
+	glBufferData(GL_ARRAY_BUFFER, gd->numFloats*sizeof(float), gd->array, GL_STATIC_DRAW);
+	int offset = 0;
+	for(i=0;i<gd->numAttributes;++i) {
+		struct aValue *av = gd->attributes+i;
+		int size = av->value;
+		int loc = glGetAttribLocation(program, av->key);
+		if(loc<0) printf("Cannot find attribute %s in program\n", av->key);
+		if(loc>=0) {
+			glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, stride*sizeof(float),
+				(GLvoid*)(offset*sizeof(float)));
+			glEnableVertexAttribArray(loc);
+		}
+		offset += size;
+	}
+
+	if(gd->numUniforms) {
+		for(i=0;i<gd->numUniforms;++i) {
+			struct uValue *uv = gd->uniforms+i;
+			int loc = glGetUniformLocation(program, uv->key);
+			if(loc<0) {
+				printf("Cannot find uniform %s in program\n", uv->key);
+				continue;
+			}
+			float *arr = uv->array;
+			switch(uv->numFloats) {
+			case 1:glUniform1fv(loc, 1, arr);break;
+			case 2:glUniform2fv(loc, 1, arr);break;
+			case 3:glUniform3fv(loc, 1, arr);break;
+			case 4:glUniform4fv(loc, 1, arr);break;
+			case 16:glUniformMatrix4fv(loc, 1, GL_FALSE, arr);break;
+			default:printf("Uknown uniform size %d %s\n", uv->numFloats, uv->key);break;
+			}
+		}
+	}
+	if(gd->indexes) {
+		GLuint indexes;
+		glGenBuffers(1, &indexes);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexes);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, gd->numIndexes*sizeof(short),
+				gd->indexes,GL_STATIC_DRAW);
+		glDrawElements(gd->type, gd->numIndexes, GL_UNSIGNED_SHORT, 0);
+		glDeleteBuffers(1, &indexes);
+
+	} else
+		glDrawArrays(gd->type, 0, gd->numFloats / stride);
+
+	if(depthTest)
+		glEnable(GL_DEPTH_TEST);
+	else
+		glDisable(GL_DEPTH_TEST);
+	glDepthFunc(depthFunc);
+	glDeleteBuffers(1, &buffer);
+	glUseProgram(oldProg);
+}
+
+
 
 void init_shader_stuff(void)
 {
